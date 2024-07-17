@@ -10,12 +10,13 @@ And here are all the diagrams describing my project:.
 In this project, I will use Yocto as my build system.
 
 # Hardware Platform
-Beaglebone Black
-IMU MPU6050
+[Beaglebone Black](https://www.beagleboard.org/projects/yocto-on-beaglebone-black)
+[IMU MPU6050](https://github.com/libdriver/mpu6050)
 
 # Open Source Projects Used
-OpenSSL
-MPU6050 Driver
+[OpenSSL](https://github.com/openssl/openssl)
+[Beaglebone Black BSP](https://www.beagleboard.org/projects/yocto-on-beaglebone-black)
+[MPU6050 Driver](https://github.com/libdriver/mpu6050)
 
 # Previously Discussed Content
 In this project I will use aesdsocket partially.
@@ -27,11 +28,13 @@ I will also add a protocol implementation where the mouse first will broadcast t
 
 I will also use X11 for controlling mouse cursor position on the GUI
 
+References to all of these can be found in the diagrams in the overview section.
+
 # Shared Material
 N/A.
 
 # Source Code Organization
-Buildroot or Yocto Repository will be hosted at [Yocto Meta Layer](https://github.com/cu-ecen-aeld/final-project-KareemLMR)
+Yocto Repository will be hosted at [Yocto Meta Layer](https://github.com/cu-ecen-aeld/final-project-KareemLMR)
 
 Wireless Air Gyroscopic Mouse source code will be hosted in in a repository at [Wireless Air Gyroscopic Mouse](https://github.com/KareemLMR/Wireless-Air-Gyroscopic-Mouse)
 
