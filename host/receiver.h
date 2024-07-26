@@ -13,14 +13,20 @@
 #include <threads.h>
 #include <sys/queue.h>
 #include <pthread.h>
+#include <stddef.h>
 
 #define PORT 12345
 #define BROADCAST_ADDR "192.168.1.255"  // Adjust this to your network's broadcast address
 
+#define container_of(ptr, type, member) \
+    ((type *)((char *)(ptr) - offsetof(type, member)))
+
+#define OFFSET_OF(type, member) ((size_t) &((type *)0)->member)
+
 typedef struct client
 {
     char* msg;
-    void (*callBack)(void);
+    void (*callBack)(struct sockaddr_in cliaddr,struct client* client, char** args);
     SLIST_ENTRY(client) entries;
 
 }client_t;
@@ -36,6 +42,7 @@ typedef struct client
 typedef struct receiver
 {
     int sockfd;
+    int unicast_socket;
     struct sockaddr_in servaddr;
     struct sockaddr_in cliaddr;
     char buffer[1024];
@@ -48,9 +55,21 @@ typedef struct receiver
 
 }receiver_t;
 
+typedef struct poller
+{
+    client_t* client;
+    mtx_t mutex;
+    cnd_t cond;
+    bool flag;
+
+}poller_t;
+
 bool init_listener_for_broadcast(receiver_t* receiver);
+bool init_unicast_listener(receiver_t* receiver);
 void* listen_for_broadcast(void* receiver);
+void* listen_for_unicast(void* receiver);
 void subscribe_for_message(receiver_t* receiver, client_t* client);
 void unsubscribe_for_message(receiver_t* receiver, client_t* client);
+void wait_for_message(receiver_t* receiver, poller_t* poller);
 
 #endif

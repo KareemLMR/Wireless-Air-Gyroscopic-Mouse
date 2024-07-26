@@ -4,7 +4,7 @@ CFLAGS = -Wall -Wextra  # Compiler flags
 TARGET = driver  # Name of the executable
 
 # List of source files
-SRCS = receiver.c main.c
+SRCS = receiver.c transmitter.c main.c
 
 # List of object files derived from source files
 OBJS = $(SRCS:.c=.o)
