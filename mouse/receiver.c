@@ -123,13 +123,13 @@ void* listen_for_unicast(void* receiver)
     {
         // Receive packet
         pthread_mutex_lock(&receiver_thread->server_mutex);
-        //receiver_thread->unicast_socket = accept(receiver_thread->sockfd, (struct sockaddr *)receiver_thread->cliaddr, NULL);
         if ((receiver_thread->unicast_socket = accept(receiver_thread->sockfd, (struct sockaddr *)&receiver_thread->cliaddr,
                        (socklen_t*)&receiver_thread->len))<0)
         {
             perror("accept");
         }
-
+        //int n = read(receiver_thread->unicast_socket , receiver_thread->buffer, 1024);
+        //receiver_thread->unicast_socket = accept(receiver_thread->sockfd, (struct sockaddr *)NULL, NULL);
         int n = recv(receiver_thread->unicast_socket, receiver_thread->buffer, 1024, 0);
         printf("%s\n",receiver_thread->buffer);
         if (n < 0)
@@ -221,8 +221,8 @@ bool init_unicast_listener(receiver_t* receiver)
         exit(EXIT_FAILURE);
     }
     receiver->servaddr.sin_family = AF_INET;
-    receiver->servaddr.sin_addr.s_addr = INADDR_ANY;
-    receiver->servaddr.sin_port = htons( PORT );
+    receiver->servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
+    receiver->servaddr.sin_port = htons( 12345 );
 
     // Forcefully attaching socket to the port 8080
     if (bind(receiver->sockfd, (struct sockaddr *)&receiver->servaddr,
@@ -256,7 +256,7 @@ void callBack(struct sockaddr_in cliaddr, client_t* received_client, char** args
     // printf("Args = %s\n", args[1]);
     // printf("Args = %s\n", args[2]);
     //poller_t* poller = container_of(received_client, poller_t, client);
-    poller_t* poller = (char*)received_client - (char*)0x70;
+    poller_t* poller = (char*)received_client - (char*)0x60;
     // printf("CallBack Poller = %p\n", (char*)poller);
     // printf("CallBack Client = %p\n", (char*)received_client);
     // printf("OFFSET_OF = %zu\n", OFFSET_OF(poller_t, mutex));
@@ -292,3 +292,4 @@ void wait_for_message(receiver_t* receiver, poller_t* poller)
 
     unsubscribe_for_message(receiver, poller->client);
 }
+
