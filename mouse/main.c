@@ -8,70 +8,62 @@
 #include "transmitter.h"
 #include "receiver.h"
 
-#define PORT 12345
-#define BROADCAST_ADDR "192.168.7.3"  // Adjust this to your network's broadcast address
+//#define PORT 12345
+//#define BROADCAST_ADDR "192.168.7.3"  // Adjust this to your network's broadcast address
+void* handshake (void* data)
+{
+    transmitter_t* initial_transmitter = (transmitter_t*)malloc(sizeof(transmitter_t));
+    strcpy(initial_transmitter->ip, "192.168.7.3");
+    initial_transmitter->port = 12345;
+    init_broadcast_sender(initial_transmitter);
 
-int main() {
-    int sockfd;
-    struct sockaddr_in servaddr;
-
-    // Create a UDP socket
-    if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
-        perror("socket creation failed");
-        exit(EXIT_FAILURE);
+    while (1)
+    {
+        send_broadcast_message(initial_transmitter, "CONNRQ");
+        sleep(1);
     }
-
-    // Enable broadcast option
-    int broadcastEnable = 1;
-    if (setsockopt(sockfd, SOL_SOCKET, SO_BROADCAST, &broadcastEnable, sizeof(broadcastEnable)) < 0) {
-        perror("setsockopt failed");
-        close(sockfd);
-        exit(EXIT_FAILURE);
-    }
-
-    // Setup server address to send broadcast message
-    memset(&servaddr, 0, sizeof(servaddr));
-    servaddr.sin_family = AF_INET;
-    servaddr.sin_addr.s_addr = inet_addr(BROADCAST_ADDR);
-    servaddr.sin_port = htons(PORT);
-
-    // Message to send
-    const char *message = "CONNRQ";
-
-    // Send broadcast message
-    if (sendto(sockfd, message, strlen(message), 0, (struct sockaddr *)&servaddr, sizeof(servaddr)) < 0) {
-        perror("sendto failed");
-        close(sockfd);
-        exit(EXIT_FAILURE);
-    }
-
-    printf("Broadcast message sent.\n");
-
-    close(sockfd);
-
-    receiver_t* response_receiver = malloc(sizeof(receiver_t));
+}
+int main()
+{
+    pthread_t handshaker;
+    receiver_t* response_receiver = (receiver_t*)malloc(sizeof(receiver_t));
     poller_t* poller = (poller_t*)malloc(sizeof(poller_t));
     client_t* client = (client_t*)malloc(sizeof(client_t));
 
-    printf("poller address = %p\n", poller);
-    printf("client address = %p\n", client);
-    init_unicast_listener(response_receiver);
-    client->msg = "ACCRQ";
-    poller->client = client;
-    wait_for_message(response_receiver, poller);
-
-    if (poller->flag)
+    while (1)
     {
-        printf("Received ACCRQ\n");
-        transmitter_t* acceptor = (transmitter_t*)malloc(sizeof(transmitter_t));
-        strcpy(acceptor->ip, inet_ntoa(response_receiver->cliaddr.sin_addr));
-        acceptor->port = ntohs(response_receiver->cliaddr.sin_port);
-        acceptor->port = 12345;
-        init_unicast_sender(acceptor);
+        int failedToCreateThread = pthread_create(&handshaker, NULL, handshake, (void*) NULL);
+        if (failedToCreateThread)
+        {
+            printf("Failed to create a thread... \n");
+            return false;
+        }
 
-        //sleep(5);
-        printf("Sending ACCRQ to %s:%d\n", acceptor->ip, acceptor->port);
-        send_message(acceptor, "ACK");
+        init_unicast_listener(response_receiver);
+        client->msg = "ACCRQ";
+        poller->client = client;
+        wait_for_message(response_receiver, poller);
+
+        if (poller->flag)
+        {
+            printf("Received ACCRQ\n");
+            pthread_cancel(handshaker);
+            transmitter_t* acceptor = (transmitter_t*)malloc(sizeof(transmitter_t));
+            strcpy(acceptor->ip, inet_ntoa(response_receiver->cliaddr.sin_addr));
+            acceptor->port = ntohs(response_receiver->cliaddr.sin_port);
+            acceptor->port = 12345;
+            init_unicast_sender(acceptor);
+
+            printf("Sending ACCRQ to %s:%d\n", acceptor->ip, acceptor->port);
+            send_message(acceptor, "ACK");
+            while (1) //infinite loop would later be replaced by subscription to stop message.
+            {
+                printf("Sending new mouse position\n");
+                send_message(acceptor, "MVMSE 500,300");
+                sleep(1);
+            }
+        }
     }
+    
     return 0;
 }

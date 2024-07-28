@@ -14,14 +14,16 @@
 #include <sys/queue.h>
 #include <pthread.h>
 #include <stddef.h>
+#include <errno.h>
+#include <time.h>
+#include <stdint.h> 
 
 #define PORT 12345
 #define BROADCAST_ADDR "192.168.1.255"  // Adjust this to your network's broadcast address
 
-#define container_of(ptr, type, member) \
-    ((type *)((char *)(ptr) - offsetof(type, member)))
-
-#define OFFSET_OF(type, member) ((size_t) &((type *)0)->member)
+#define container_of(ptr, type, member) ({                      \
+        const typeof( ((type *)0)->member ) *__mptr = (ptr);    \
+        (type *)( (char *)__mptr - offsetof(type,member) );})
 
 typedef struct client
 {
@@ -57,7 +59,7 @@ typedef struct receiver
 
 typedef struct poller
 {
-    client_t* client;
+    client_t client;
     pthread_mutex_t mutex;
     pthread_cond_t cond;
     bool flag;
@@ -71,5 +73,6 @@ void* listen_for_unicast(void* receiver);
 void subscribe_for_message(receiver_t* receiver, client_t* client);
 void unsubscribe_for_message(receiver_t* receiver, client_t* client);
 void wait_for_message(receiver_t* receiver, poller_t* poller);
+void wait_for_message_untill(receiver_t* receiver, poller_t* poller, int timeout);
 
 #endif

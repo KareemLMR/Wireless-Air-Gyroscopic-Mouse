@@ -1,6 +1,6 @@
 CC = gcc
 CFLAGS = -Wall -Wextra  # Compiler flags
-#LDFLAGS =  # Linker flags
+LDFLAGS = -lX11  # Linker flags
 TARGET = driver  # Name of the executable
 
 # List of source files
@@ -14,7 +14,7 @@ all: $(TARGET)
 
 # Rule to build the executable
 $(TARGET): $(OBJS)
-	$(CC) $(OBJS) -o $(TARGET)
+	$(CC) $(OBJS) -o $(TARGET) $(LDFLAGS)
 
 # Rule to compile .c files to .o files
 %.o: %.c

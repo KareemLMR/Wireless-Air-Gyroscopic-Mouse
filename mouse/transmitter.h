@@ -16,5 +16,7 @@ typedef struct transmitter
     char ip[20];
 }transmitter_t;
 
+bool init_broadcast_sender(transmitter_t* transmitter);
 bool init_unicast_sender(transmitter_t* transmitter);
 void send_message(transmitter_t* transmitter, char* msg);
+void send_broadcast_message(transmitter_t* transmitter, char* msg);

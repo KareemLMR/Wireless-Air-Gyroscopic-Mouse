@@ -1,5 +1,37 @@
 #include "transmitter.h"
 
+bool init_broadcast_sender(transmitter_t* transmitter)
+{
+    if (atomic_load(&transmitter->is_initialized))
+    {
+        printf("Already initialized! \n");
+        return false;
+    }
+    // Create a UDP socket
+    if ((transmitter->sockfd  = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
+    {
+        perror("socket creation failed");
+        return false;
+    }
+
+    // Enable broadcast option
+    int broadcastEnable = 1;
+    if (setsockopt(transmitter->sockfd , SOL_SOCKET, SO_BROADCAST, &broadcastEnable, sizeof(broadcastEnable)) < 0)
+    {
+        perror("setsockopt failed");
+        close(transmitter->sockfd );
+        return false;
+    }
+
+    // Setup server address to send broadcast message
+    memset(&transmitter->servaddr , 0, sizeof(transmitter->servaddr));
+    transmitter->servaddr.sin_family = AF_INET;
+    transmitter->servaddr.sin_addr.s_addr = inet_addr(transmitter->ip);
+    transmitter->servaddr.sin_port = htons(transmitter->port);
+
+    atomic_store(&transmitter->is_initialized, true);
+}
+
 bool init_unicast_sender(transmitter_t* transmitter)
 {
     if (atomic_load(&transmitter->is_initialized))
@@ -37,23 +69,15 @@ bool init_unicast_sender(transmitter_t* transmitter)
         sleep(1);
         //return false;
     }
-    printf("Initialized!\n");
     atomic_store(&transmitter->is_initialized, true);
 }
 
 void send_message(transmitter_t* transmitter, char* msg)
 {
-    printf("msg = %s\n", msg);
-    int n = send(transmitter->sockfd , msg , strlen(msg) , 0);
-    //{
-    //     perror("send failed");
-    //     close(transmitter->sockfd);
-    //     //exit(EXIT_FAILURE);
-    // }
-    // else
-    // {
-    //     printf("Sent!\n");
-    // }
-    printf("%d bytes sent\n", n);
+    send(transmitter->sockfd , msg , strlen(msg) , 0);
 }
 
+void send_broadcast_message(transmitter_t* transmitter, char* msg)
+{
+    sendto(transmitter->sockfd, msg, strlen(msg), 0, (struct sockaddr *)&transmitter->servaddr, sizeof(transmitter->servaddr));
+}

@@ -1,7 +1,5 @@
 #include "receiver.h"
 
-//SLIST_HEAD(headClient, client) clients = SLIST_HEAD_INITIALIZER(clients);
-
 bool init_listener_for_broadcast(receiver_t* receiver)
 {
     if (atomic_load(&receiver->is_initialized))
@@ -23,7 +21,7 @@ bool init_listener_for_broadcast(receiver_t* receiver)
     if (setsockopt(receiver->sockfd, SOL_SOCKET, SO_REUSEADDR | SO_BROADCAST, &broadcastEnable, sizeof(broadcastEnable)) < 0)
     {
         perror("setsockopt failed");
-        close(receiver->sockfd);
+        //close(receiver->sockfd);
         return false;
     }
 
@@ -37,7 +35,7 @@ bool init_listener_for_broadcast(receiver_t* receiver)
     if (bind(receiver->sockfd, (const struct sockaddr *)&receiver->servaddr, sizeof(receiver->servaddr)) < 0)
     {
         perror("bind failed");
-        close(receiver->sockfd);
+        //close(receiver->sockfd);
         return false;
     }
 
@@ -69,7 +67,7 @@ void* listen_for_broadcast(void* receiver)
         int n = recvfrom(receiver_thread->sockfd, (char *)receiver_thread->buffer, sizeof(receiver_thread->buffer), 0, (struct sockaddr *)&receiver_thread->cliaddr, &receiver_thread->len);
         if (n < 0) {
             perror("recvfrom failed");
-            close(receiver_thread->sockfd);
+            //close(receiver_thread->sockfd);
             //exit(EXIT_FAILURE);
         }
 
@@ -109,7 +107,7 @@ void* listen_for_broadcast(void* receiver)
         printf("--------------------------------------\n");
     }
 
-    close(receiver_thread->sockfd);
+    //close(receiver_thread->sockfd);
 }
 void* listen_for_unicast(void* receiver)
 {
@@ -128,14 +126,13 @@ void* listen_for_unicast(void* receiver)
         {
             perror("accept");
         }
-        //int n = read(receiver_thread->unicast_socket , receiver_thread->buffer, 1024);
-        //receiver_thread->unicast_socket = accept(receiver_thread->sockfd, (struct sockaddr *)NULL, NULL);
+
         int n = recv(receiver_thread->unicast_socket, receiver_thread->buffer, 1024, 0);
         printf("%s\n",receiver_thread->buffer);
         if (n < 0)
         {
             perror("recvfrom failed");
-            close(receiver_thread->unicast_socket);
+            //close(receiver_thread->unicast_socket);
             //exit(EXIT_FAILURE);
         }
 
@@ -175,8 +172,8 @@ void* listen_for_unicast(void* receiver)
         printf("--------------------------------------\n");
     }
 
-    close(receiver_thread->unicast_socket);
-    close(receiver_thread->sockfd);
+    //close(receiver_thread->unicast_socket);
+    //close(receiver_thread->sockfd);
 }
 void subscribe_for_message(receiver_t* receiver, client_t* client)
 {
@@ -221,8 +218,8 @@ bool init_unicast_listener(receiver_t* receiver)
         exit(EXIT_FAILURE);
     }
     receiver->servaddr.sin_family = AF_INET;
-    receiver->servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
-    receiver->servaddr.sin_port = htons( 12345 );
+    receiver->servaddr.sin_addr.s_addr = INADDR_ANY;
+    receiver->servaddr.sin_port = htons( PORT );
 
     // Forcefully attaching socket to the port 8080
     if (bind(receiver->sockfd, (struct sockaddr *)&receiver->servaddr,
@@ -230,7 +227,7 @@ bool init_unicast_listener(receiver_t* receiver)
         perror("bind failed");
         exit(EXIT_FAILURE);
     }
-    if (listen(receiver->sockfd, 3) < 0) {
+    if (listen(receiver->sockfd, 10) < 0) {
         perror("listen");
         exit(EXIT_FAILURE);
     }
@@ -251,15 +248,29 @@ bool init_unicast_listener(receiver_t* receiver)
 
 void callBack(struct sockaddr_in cliaddr, client_t* received_client, char** args)
 {
-    // printf("Matched!\n");
-    // printf("Args = %s\n", args[0]);
-    // printf("Args = %s\n", args[1]);
-    // printf("Args = %s\n", args[2]);
-    //poller_t* poller = container_of(received_client, poller_t, client);
-    poller_t* poller = (char*)received_client - (char*)0x60;
-    // printf("CallBack Poller = %p\n", (char*)poller);
-    // printf("CallBack Client = %p\n", (char*)received_client);
-    // printf("OFFSET_OF = %zu\n", OFFSET_OF(poller_t, mutex));
+    poller_t* test_poller = (poller_t*)malloc(sizeof(poller_t));
+    poller_t* poller;
+    uintptr_t padding = 0;
+    // if ((char*)test_poller < (char*)test_poller->client)
+    // {
+    //     printf("Poller < client!\n");
+    //     padding = (char*)test_poller->client - (char*)test_poller;
+    //     poller = (char*)received_client - (char*)padding;
+    // }
+    // else
+    // {
+    //     printf("Poller >= client!\n");
+    //     padding = (uintptr_t)test_poller - (uintptr_t)test_poller->client;
+    //     poller = (poller_t*)((uintptr_t)received_client + padding);
+    // }
+
+    poller = container_of(received_client, poller_t, client);
+    
+    printf("callback poller = %p\n", (char*)poller);
+    printf("callback poller->client = %p\n", (char*)received_client);
+    printf("Offset of client: %zu\n", offsetof(poller_t, client));
+    printf("padding = %p\n", (char*)padding);
+    free(test_poller);
     pthread_mutex_lock(&poller->mutex);
     printf("Main thread setting flag to true and waking up waiting thread...\n");
     poller->flag = true;
@@ -269,17 +280,12 @@ void callBack(struct sockaddr_in cliaddr, client_t* received_client, char** args
 
 void wait_for_message(receiver_t* receiver, poller_t* poller)
 {
-    // printf("Poller = %p\n", poller);
-    // printf("ENtered!\n");
     poller->flag = false;
     pthread_mutex_init(&poller->mutex, NULL);
     pthread_cond_init(&poller->cond, NULL);
-    //printf("Setting CallBack!\n");
 
-    poller->client->callBack = callBack;
-    //printf("CallBack set successfully!\n");
-    subscribe_for_message(receiver, poller->client);
-    //printf("Subscribed successfully!\n");
+    poller->client.callBack = callBack;
+    subscribe_for_message(receiver, &poller->client);
     pthread_mutex_lock(&poller->mutex);
 
     while (!poller->flag)
@@ -290,6 +296,45 @@ void wait_for_message(receiver_t* receiver, poller_t* poller)
     
     pthread_mutex_unlock(&poller->mutex);
 
-    unsubscribe_for_message(receiver, poller->client);
+    unsubscribe_for_message(receiver, &poller->client);
 }
 
+void wait_for_message_untill(receiver_t* receiver, poller_t* poller, int timeout)
+{
+    struct timespec ts;
+    int rc;
+
+    poller->flag = false;
+    pthread_mutex_init(&poller->mutex, NULL);
+    pthread_cond_init(&poller->cond, NULL);
+
+    poller->client.callBack = callBack;
+    subscribe_for_message(receiver, &poller->client);
+
+    pthread_mutex_lock(&poller->mutex);
+
+    // Get the current time
+    clock_gettime(CLOCK_REALTIME, &ts);
+
+    // Set the timeout (e.g., 5 seconds from now)
+    ts.tv_sec += timeout;
+
+    // Wait on the condition variable with a timeout
+    rc = pthread_cond_timedwait(&poller->cond, &poller->mutex, &ts);
+
+    if (rc == ETIMEDOUT)
+    {
+        printf("Timeout occurred!\n");
+    }
+    else if (rc != 0)
+    {
+        fprintf(stderr, "Error waiting on condition variable: %d\n", rc);
+    } else 
+    {
+        printf("Condition variable signaled!\n");
+    }
+
+    pthread_mutex_unlock(&poller->mutex);
+
+    unsubscribe_for_message(receiver, &poller->client);
+}
