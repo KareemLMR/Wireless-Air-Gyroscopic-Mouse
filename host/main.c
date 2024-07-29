@@ -98,7 +98,6 @@ int main()
                 subscribe_for_message(response_receiver, &poller->client);
                 while (1) //Infinite loop will be replaced by a stop condition
                 {
-                    printf("Inside loop\n");
                     sleep(1);
                 }
             }

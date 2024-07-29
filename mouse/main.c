@@ -28,7 +28,7 @@ int main()
     pthread_t handshaker;
     receiver_t* response_receiver = (receiver_t*)malloc(sizeof(receiver_t));
     poller_t* poller = (poller_t*)malloc(sizeof(poller_t));
-    client_t* client = (client_t*)malloc(sizeof(client_t));
+    //client_t* client = (client_t*)malloc(sizeof(client_t));
 
     while (1)
     {
@@ -40,8 +40,8 @@ int main()
         }
 
         init_unicast_listener(response_receiver);
-        client->msg = "ACCRQ";
-        poller->client = client;
+        poller->client.msg = "ACCRQ";
+//        poller->client = client;
         wait_for_message(response_receiver, poller);
 
         if (poller->flag)
@@ -58,6 +58,9 @@ int main()
             send_message(acceptor, "ACK");
             while (1) //infinite loop would later be replaced by subscription to stop message.
             {
+                atomic_store(&acceptor->is_initialized, false);
+                close(acceptor->sockfd);
+                init_unicast_sender(acceptor);
                 printf("Sending new mouse position\n");
                 send_message(acceptor, "MVMSE 500,300");
                 sleep(1);
