@@ -61,12 +61,14 @@ int main()
                 atomic_store(&acceptor->is_initialized, false);
                 close(acceptor->sockfd);
                 init_unicast_sender(acceptor);
-                printf("Sending new mouse position\n");
-                send_message(acceptor, "MVMSE 500,300");
-                sleep(1);
+                printf("Enter new mouse position\n");
+                char cmd[20] = "MVMSE ";
+                char pos[10];
+                scanf("%s", pos);
+                strcat(cmd, pos);
+                send_message(acceptor, cmd);
             }
         }
     }
-    
     return 0;
 }
