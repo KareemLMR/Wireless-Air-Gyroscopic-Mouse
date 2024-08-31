@@ -26,6 +26,8 @@
 #define RNG_8G 0x00
 #define OSR_512 0x00
 
+int init_x, init_y, init_z;
+
 typedef struct {
     int file;
     uint8_t address;
@@ -135,10 +137,17 @@ int main() {
 
     // Initialize sensor
     init_qmc5883l(&sensor);
-
+    status = read_magnetic_data(&sensor, &x, &y, &z);
+    init_x = x;
+    init_y = y;
+    init_z = z;
+    printf("X: %d, Y: %d, Z: %d, Azimuth: %.2f\n", init_x, init_y, init_z, azimuth);
     while (1) {
         // Read magnetic data
         status = read_magnetic_data(&sensor, &x, &y, &z);
+        x -= init_x;
+        y -= init_y;
+        z -= init_z;
         if (status == 0) {
             azimuth = calculate_azimuth(x, y, z);
             printf("X: %d, Y: %d, Z: %d, Azimuth: %.2f\n", x, y, z, azimuth);
