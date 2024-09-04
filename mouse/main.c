@@ -32,7 +32,7 @@
 #define ACCEL_CONFIG 0x1C
 #define ACCEL_CONFIG_16G 0x03
 
-typedef enum {REST, ACC_FWD, DEC_FWD, ACC_BACK, DEC_BACK}motion_state_t;
+typedef enum {REST, ACC_FWD, DEC_FWD, ACC_BACK, DEC_BACK, UNIFORM_FWD, UNIFORM_BACK}motion_state_t;
 
 motion_state_t x_axis = REST, y_axis = REST; 
 
@@ -42,7 +42,7 @@ motion_state_t x_axis = REST, y_axis = REST;
 void* handshake (void* data)
 {
     transmitter_t* initial_transmitter = (transmitter_t*)malloc(sizeof(transmitter_t));
-    strcpy(initial_transmitter->ip, "192.168.1.255");
+    strcpy(initial_transmitter->ip, "192.168.7.3");
     initial_transmitter->port = 12345;
     init_broadcast_sender(initial_transmitter);
 
@@ -76,15 +76,15 @@ int main()
         //return 1;
     }
 
-//    buf[0] = ACCEL_CONFIG;
-//    buf[1] = ACCEL_CONFIG_16G;
-//    if (write(file, buf, 2) != 2) {
-//        perror("Failed to write to the i2c bus.");
-//        close(file);
-//        return 1;
-//    }
+    buf[0] = ACCEL_CONFIG;
+    buf[1] = ACCEL_CONFIG_16G;
+    if (write(file, buf, 2) != 2) {
+        perror("Failed to write to the i2c bus.");
+        close(file);
+        return 1;
+    }
 
-//    printf("MPU6050 sensitivity set to ±16g\n");
+    printf("MPU6050 sensitivity set to ±16g\n");
 
     buf[0] = MPU6050_REG_ACCEL_XOUT_H;
     if (write(file, buf, 1) != 1) {
@@ -150,7 +150,7 @@ int main()
 
                     // Set the sleep duration
                     req.tv_sec = 0;  // seconds
-                    req.tv_nsec = 100000000;  // nanoseconds (1 milli seconds)
+                    req.tv_nsec = 10000000;  // nanoseconds (1 milli seconds)
 
                     printf("Sleeping for %ld seconds and %ld nanoseconds...\n", req.tv_sec, req.tv_nsec);
 
@@ -164,12 +164,14 @@ int main()
                     buf[0] = MPU6050_REG_ACCEL_XOUT_H;
                     if (write(file, buf, 1) != 1) {
                         perror("Failed to set register address");
+                        continue;
             //            close(file);
             //            return 1;
                     }
 
                     if (read(file, buf, 6) != 6) {
                         perror("Failed to read data");
+                        continue;
             //            close(file);
             //            return 1;
                     }
@@ -177,7 +179,19 @@ int main()
                     int16_t ax = (((buf[0] << 8) | buf[1]) - init_ax);
                     if (abs(ax) <= 300)
                     {
-                        x_axis = REST;
+                        if (x_axis == ACC_FWD)
+                        {
+                            x_axis = UNIFORM_FWD;
+                        }
+                        else if (x_axis == ACC_BACK)
+                        {
+                            x_axis = UNIFORM_BACK;
+                        }
+                        else if (x_axis == DEC_BACK || x_axis == DEC_FWD)
+                        {
+                            x_axis = REST;
+                        }
+                        
                         ax = 0;
                         vx = 0;
                     }
@@ -188,7 +202,7 @@ int main()
                             x_axis = ACC_BACK;
                             vx -= ((float)ax * -0.01);
                         }
-                        else if (x_axis == ACC_FWD)
+                        else if (x_axis == UNIFORM_FWD)
                         {
                             x_axis = DEC_FWD;
                             vx += ((float)ax * -0.01);
@@ -201,7 +215,7 @@ int main()
                             x_axis = ACC_FWD;
                             vx += ((float)ax * 0.01);
                         }
-                        else if (x_axis == ACC_BACK)
+                        else if (x_axis == UNIFORM_BACK)
                         {
                             x_axis = DEC_BACK;
                             vx -= ((float)ax * 0.01);
@@ -213,7 +227,18 @@ int main()
                     int16_t ay = (((buf[2] << 8) | buf[3]) - init_ay);
                     if (abs(ay) <= 300)
                     {
-                        y_axis = REST;
+                        if (y_axis == ACC_FWD)
+                        {
+                            y_axis = UNIFORM_FWD;
+                        }
+                        else if (y_axis == ACC_BACK)
+                        {
+                            y_axis = UNIFORM_BACK;
+                        }
+                        else if (y_axis == DEC_BACK || y_axis == DEC_FWD)
+                        {
+                            y_axis = REST;
+                        }
                         ay = 0;
                         vy = 0;
                     }
@@ -224,7 +249,7 @@ int main()
                             y_axis = ACC_BACK;
                             vy -= ((float)ay * -0.01);
                         }
-                        else if (y_axis == ACC_FWD)
+                        else if (y_axis == UNIFORM_FWD)
                         {
                             y_axis = DEC_FWD;
                             vy += ((float)ay * -0.01);
@@ -237,14 +262,14 @@ int main()
                             y_axis = ACC_FWD;
                             vy += ((float)ay * 0.01);
                         }
-                        else if (y_axis == ACC_BACK)
+                        else if (y_axis == UNIFORM_BACK)
                         {
                             y_axis = DEC_BACK;
                             vy -= ((float)ay * 0.01);
                         }
                     }
 
-                    y += vy;
+                    y -= vy;
                     int16_t az = ((buf[4] << 8) | buf[5]);
                     //if (abs(az) <= 100)
                     //{
