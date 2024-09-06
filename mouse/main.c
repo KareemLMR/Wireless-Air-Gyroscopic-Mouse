@@ -16,29 +16,69 @@
 #include <stdint.h>
 #include <time.h>
 #include <unistd.h>
+#include <math.h>
 
-// MPU6050 I2C Address
 #define MPU6050_ADDR 0x68
+#define MPU6050_PWR_MGMT_1 0x6B
+#define MPU6050_ACCEL_XOUT_H 0x3B
+#define MPU6050_ACCEL_XOUT_L 0x3C
+#define MPU6050_ACCEL_YOUT_H 0x3D
+#define MPU6050_ACCEL_YOUT_L 0x3E
+#define MPU6050_ACCEL_ZOUT_H 0x3F
+#define MPU6050_ACCEL_ZOUT_L 0x40
+#define MPU6050_GYRO_XOUT_H 0x43
+#define MPU6050_GYRO_XOUT_L 0x44
+#define MPU6050_GYRO_YOUT_H 0x45
+#define MPU6050_GYRO_YOUT_L 0x46
+#define MPU6050_GYRO_ZOUT_H 0x47
+#define MPU6050_GYRO_ZOUT_L 0x48
 
-// MPU6050 Register Addresses
-#define MPU6050_REG_PWR_MGMT_1 0x6B
-#define MPU6050_REG_ACCEL_XOUT_H 0x3B
-#define MPU6050_REG_ACCEL_XOUT_L 0x3C
-#define MPU6050_REG_ACCEL_YOUT_H 0x3D
-#define MPU6050_REG_ACCEL_YOUT_L 0x3E
-#define MPU6050_REG_ACCEL_ZOUT_H 0x3F
-#define MPU6050_REG_ACCEL_ZOUT_L 0x40
+float pitch_gyro = 0.0;
+// Function to initialize MPU6050
+void MPU6050_Init(int file) {
+    // Wake up the MPU6050
+    uint8_t buf[2];
+    buf[0] = MPU6050_PWR_MGMT_1;
+    buf[1] = 0x00; // Wake up the MPU6050
+    if (write(file, buf, 2) != 2) {
+        perror("Failed to wake up MPU6050");
+        exit(1);
+    }
+}
 
-#define ACCEL_CONFIG 0x1C
-#define ACCEL_CONFIG_16G 0x03
+// Function to read raw data from MPU6050
+int16_t MPU6050_Read_16(int file, uint8_t reg) {
+    uint8_t buf[2];
+    if (write(file, &reg, 1) != 1) {
+        perror("Failed to set register");
+        exit(1);
+    }
+    if (read(file, buf, 2) != 2) {
+        perror("Failed to read data");
+        exit(1);
+    }
+    return (int16_t)((buf[0] << 8) | buf[1]);
+}
 
-typedef enum {REST, ACC_FWD, DEC_FWD, ACC_BACK, DEC_BACK, UNIFORM_FWD, UNIFORM_BACK}motion_state_t;
+// Function to calculate Euler angles
+void Calculate_Euler_Angles(float ax, float ay, float az, float gx, float gy, float gz, float *roll, float *pitch, float *yaw) {
+    // Convert raw accelerometer data to angles
+    *roll = atan2(ay, az) * 180.0 / M_PI;
+    float pitch_acc = atan2(-ax, sqrt(ay * ay + az * az)) * -180.0 / M_PI;
 
-motion_state_t x_axis = REST, y_axis = REST; 
+    // Simple integration for yaw (this is a rough estimate)
+    static float prev_gz = 0;
+    static float delta_t = 0.01; // Time interval in seconds (update this based on your setup)
+    pitch_gyro += gy * delta_t;
+    *pitch = 0.0 * pitch_acc + 1 * pitch_gyro;
+    *yaw += gz * delta_t; // Update yaw using gyro data
+    if (*yaw > 360.0) *yaw -= 360.0;
+    if (*pitch > 360.0) *pitch -= 360.0;
+    //if (*yaw < 0.0) *yaw += 360.0;
 
+    prev_gz = gz;
+}
 
-//#define PORT 12345
-//#define BROADCAST_ADDR "192.168.7.3"  // Adjust this to your network's broadcast address
 void* handshake (void* data)
 {
     transmitter_t* initial_transmitter = (transmitter_t*)malloc(sizeof(transmitter_t));
@@ -52,70 +92,26 @@ void* handshake (void* data)
         sleep(1);
     }
 }
+
 int main()
 {
-
-        int file;
-    char *filename = "/dev/i2c-2"; // Change to your I2C bus device
-    while ((file = open(filename, O_RDWR)) < 0) {
-        perror("Failed to open I2C bus");
-        //return 1;
+    const char *i2c_dev = "/dev/i2c-2"; // Adjust based on your setup
+    int file = open(i2c_dev, O_RDWR);
+    if (file < 0) {
+        perror("Failed to open the I2C bus");
+        exit(1);
     }
 
-    while (ioctl(file, I2C_SLAVE, MPU6050_ADDR) < 0) {
-        perror("Failed to connect to sensor");
-        //close(file);
-        //return 1;
+    if (ioctl(file, I2C_SLAVE, MPU6050_ADDR) < 0) {
+        perror("Failed to acquire bus access and/or talk to MPU6050");
+        exit(1);
     }
 
-    // Wake up the MPU6050 (default is sleep mode)
-    char buf[2] = { MPU6050_REG_PWR_MGMT_1, 0 };
-    while (write(file, buf, 2) != 2) {
-        perror("Failed to wake up MPU6050");
-        //close(file);
-        //return 1;
-    }
-
-    buf[0] = ACCEL_CONFIG;
-    buf[1] = ACCEL_CONFIG_16G;
-    if (write(file, buf, 2) != 2) {
-        perror("Failed to write to the i2c bus.");
-        close(file);
-        return 1;
-    }
-
-    printf("MPU6050 sensitivity set to ±16g\n");
-
-    buf[0] = MPU6050_REG_ACCEL_XOUT_H;
-    if (write(file, buf, 1) != 1) {
-        perror("Failed to set register address");
-        close(file);
-        return 1;
-    }
-
-    if (read(file, buf, 6) != 6) {
-        perror("Failed to read data");
-        close(file);
-        return 1;
-    }
-
-    int16_t init_ax = (buf[0] << 8) | buf[1];
-    int16_t init_ay = (buf[2] << 8) | buf[3];
-    int16_t init_az = (buf[4] << 8) | buf[5];
-
-    printf("Accelerometer data:\n");
-    printf("X: %d\n", init_ax);
-    printf("Y: %d\n", init_ay);
-    printf("Z: %d\n", init_az); 
-    // Read accelerometer data
-    int16_t vz = 0, x = 750, y = 750, z = 0;
-    int16_t dAz = 0;
-    float vy, vx;
+    MPU6050_Init(file);
 
     pthread_t handshaker;
     receiver_t* response_receiver = (receiver_t*)malloc(sizeof(receiver_t));
     poller_t* poller = (poller_t*)malloc(sizeof(poller_t));
-    //client_t* client = (client_t*)malloc(sizeof(client_t));
 
     while (1)
     {
@@ -145,144 +141,27 @@ int main()
             send_message(acceptor, "ACK");
             while (1) //infinite loop would later be replaced by subscription to stop message.
             {
-                    struct timespec req;
-                    struct timespec rem;
+                int16_t ax = MPU6050_Read_16(file, MPU6050_ACCEL_XOUT_H);
+                int16_t ay = MPU6050_Read_16(file, MPU6050_ACCEL_YOUT_H);
+                int16_t az = MPU6050_Read_16(file, MPU6050_ACCEL_ZOUT_H);
+                int16_t gx = MPU6050_Read_16(file, MPU6050_GYRO_XOUT_H);
+                int16_t gy = MPU6050_Read_16(file, MPU6050_GYRO_YOUT_H);
+                int16_t gz = MPU6050_Read_16(file, MPU6050_GYRO_ZOUT_H);
 
-                    // Set the sleep duration
-                    req.tv_sec = 0;  // seconds
-                    req.tv_nsec = 10000000;  // nanoseconds (1 milli seconds)
+                // Convert raw data to proper units (e.g., g for accelerometer and degrees/s for gyroscope)
+                float ax_f = ax / 16384.0;
+                float ay_f = ay / 16384.0;
+                float az_f = az / 16384.0;
+                float gx_f = gx / 131.0;
+                float gy_f = gy / 131.0;
+                float gz_f = gz / 131.0;
 
-                    printf("Sleeping for %ld seconds and %ld nanoseconds...\n", req.tv_sec, req.tv_nsec);
+                float roll, pitch, yaw;
+                Calculate_Euler_Angles(ax_f, ay_f, az_f, gx_f, gy_f, gz_f, &roll, &pitch, &yaw);
 
-                    // Sleep for the specified duration
-                    if (nanosleep(&req, &rem) == -1) {
-                        perror("nanosleep");
-                        return 1;
-                    }
+                printf("Roll: %.2f, Pitch: %.2f, Yaw: %.2f\n", roll, pitch, yaw);
 
-                    printf("Awoke after sleeping.\n");
-                    buf[0] = MPU6050_REG_ACCEL_XOUT_H;
-                    if (write(file, buf, 1) != 1) {
-                        perror("Failed to set register address");
-                        continue;
-            //            close(file);
-            //            return 1;
-                    }
-
-                    if (read(file, buf, 6) != 6) {
-                        perror("Failed to read data");
-                        continue;
-            //            close(file);
-            //            return 1;
-                    }
-
-                    int16_t ax = (((buf[0] << 8) | buf[1]) - init_ax);
-                    if (abs(ax) <= 300)
-                    {
-                        if (x_axis == ACC_FWD)
-                        {
-                            x_axis = UNIFORM_FWD;
-                        }
-                        else if (x_axis == ACC_BACK)
-                        {
-                            x_axis = UNIFORM_BACK;
-                        }
-                        else if (x_axis == DEC_BACK || x_axis == DEC_FWD)
-                        {
-                            x_axis = REST;
-                        }
-                        
-                        ax = 0;
-                        vx = 0;
-                    }
-                    else if (ax < 0)
-                    {
-                        if (x_axis == REST)
-                        {
-                            x_axis = ACC_BACK;
-                            vx -= ((float)ax * -0.01);
-                        }
-                        else if (x_axis == UNIFORM_FWD)
-                        {
-                            x_axis = DEC_FWD;
-                            vx += ((float)ax * -0.01);
-                        }
-                    }
-                    else if (ax > 0)
-                    {
-                        if (x_axis == REST)
-                        {
-                            x_axis = ACC_FWD;
-                            vx += ((float)ax * 0.01);
-                        }
-                        else if (x_axis == UNIFORM_BACK)
-                        {
-                            x_axis = DEC_BACK;
-                            vx -= ((float)ax * 0.01);
-                        }
-                    }
-
-                    x += vx;
-
-                    int16_t ay = (((buf[2] << 8) | buf[3]) - init_ay);
-                    if (abs(ay) <= 300)
-                    {
-                        if (y_axis == ACC_FWD)
-                        {
-                            y_axis = UNIFORM_FWD;
-                        }
-                        else if (y_axis == ACC_BACK)
-                        {
-                            y_axis = UNIFORM_BACK;
-                        }
-                        else if (y_axis == DEC_BACK || y_axis == DEC_FWD)
-                        {
-                            y_axis = REST;
-                        }
-                        ay = 0;
-                        vy = 0;
-                    }
-                    else if (ay < 0)
-                    {
-                        if (y_axis == REST)
-                        {
-                            y_axis = ACC_BACK;
-                            vy -= ((float)ay * -0.01);
-                        }
-                        else if (y_axis == UNIFORM_FWD)
-                        {
-                            y_axis = DEC_FWD;
-                            vy += ((float)ay * -0.01);
-                        }
-                    }
-                    else if (ay > 0)
-                    {
-                        if (y_axis == REST)
-                        {
-                            y_axis = ACC_FWD;
-                            vy += ((float)ay * 0.01);
-                        }
-                        else if (y_axis == UNIFORM_BACK)
-                        {
-                            y_axis = DEC_BACK;
-                            vy -= ((float)ay * 0.01);
-                        }
-                    }
-
-                    y -= vy;
-                    int16_t az = ((buf[4] << 8) | buf[5]);
-                    //if (abs(az) <= 100)
-                    //{
-                    //    az = 0;
-                    //}
-                    vz += az * 0.01;
-                    z += vz;
-                    
-            //        printf("Accelerometer data:\n");
-                    printf("AX: %d, VX = %f, X = %d, state = %d\n", ax, vx, x, x_axis);
-            //        printf("AY: %d, VY = %d, Y = %d\n", ay, vy, y);
-            //        printf("AZ: %d, VZ = %d, Z = %d\n", az, vz, z);
-                printf("AY: %d, VY = %f, Y = %d, state = %d\n", ay, vy, y, y_axis); 
+                usleep(50000); // Sleep for 50ms
                 atomic_store(&acceptor->is_initialized, false);
                 close(acceptor->sockfd);
                 init_unicast_sender(acceptor);
@@ -292,15 +171,16 @@ int main()
                 char x_str[10];
                 char y_str[10];
                 //scanf("%s", pos);
+                int x = (yaw * 70.0) + 750;
+                int y = (pitch * 70.0) + 750;
                 sprintf(x_str, "%d", x);
                 sprintf(y_str, "%d", y);
-                strcpy(pos, y_str);
+                strcpy(pos, x_str);
                 strcat(pos, ",");
-                strcat(pos, x_str);
+                strcat(pos, y_str);
                 strcat(cmd, pos);
                 send_message(acceptor, cmd);
             }
         }
     }
-    return 0;
 }
