@@ -82,7 +82,7 @@ void Calculate_Euler_Angles(float ax, float ay, float az, float gx, float gy, fl
 void* handshake (void* data)
 {
     transmitter_t* initial_transmitter = (transmitter_t*)malloc(sizeof(transmitter_t));
-    strcpy(initial_transmitter->ip, "192.168.7.3");
+    strcpy(initial_transmitter->ip, "192.168.1.255");
     initial_transmitter->port = 12345;
     init_broadcast_sender(initial_transmitter);
 
